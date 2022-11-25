@@ -8,6 +8,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Global logger instance that can be used throughout the application with the
+// predefined configuration.
 var (
 	DefaultLogger *logrus.Logger
 )
@@ -37,34 +39,50 @@ func init() {
 	DefaultLogger = logrus.New()
 	DefaultLogger.SetFormatter(&logrus.JSONFormatter{})
 
-	f, err := os.OpenFile(os.Getenv("LOGDIR")+"log.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	// Open the logfile.
+	f, err := os.OpenFile(
+		os.Getenv("LOGDIR")+"log.log",
+		os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644,
+	)
+
 	if err != nil {
 		panic(err.Error())
 	}
 
-	if env := os.Getenv("ENVIRONMENT"); env == "dev" {
-		// In development environments we want DEBUG and INFO messages in the console,
-		// INFO and above can go into the regular logfile.
-		DefaultLogger.SetOutput(ioutil.Discard)
-		DefaultLogger.SetLevel(logrus.DebugLevel)
-		DefaultLogger.AddHook(&WriterHook{
-			Writer: os.Stderr,
-			LogLevels: []logrus.Level{
-				logrus.DebugLevel,
-				logrus.InfoLevel,
-			},
-		})
-
-		DefaultLogger.AddHook(&WriterHook{
-			Writer: f,
-			LogLevels: []logrus.Level{
-				logrus.WarnLevel,
-				logrus.PanicLevel,
-				logrus.ErrorLevel,
-			},
-		})
-	} else {
+	if env := os.Getenv("ENVIRONMENT"); env != "dev" {
+		// In production all INFO and above logs will be written to file.
 		DefaultLogger.SetLevel(logrus.InfoLevel)
 		DefaultLogger.SetOutput(f)
+		return
 	}
+
+	// This removes all configured output hooks, allowing us to overwrite
+	// the default output location.
+	DefaultLogger.SetOutput(ioutil.Discard)
+
+	// In development environments we want DEBUG and INFO messages in the console,
+	// INFO and above can go into the regular logfile.
+	DefaultLogger.SetLevel(logrus.DebugLevel)
+
+	// DEBUG and INFO to console
+	DefaultLogger.AddHook(&WriterHook{
+		Writer: os.Stderr,
+		LogLevels: []logrus.Level{
+			logrus.DebugLevel,
+			logrus.InfoLevel,
+		},
+	})
+
+	// Everything else can go into the logfile.
+	DefaultLogger.AddHook(&WriterHook{
+		Writer: f,
+		LogLevels: []logrus.Level{
+			logrus.WarnLevel,
+			logrus.PanicLevel,
+			logrus.ErrorLevel,
+			logrus.FatalLevel,
+			logrus.TraceLevel,
+		},
+	})
+
 }
