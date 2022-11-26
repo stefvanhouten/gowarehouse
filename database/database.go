@@ -1,42 +1,35 @@
-package main
+package database
 
 import (
 	"database/sql"
 	"time"
 
 	"example/logger" // Our local logging module.
-	"github.com/caarlos0/env/v6"
 	"github.com/go-sql-driver/mysql"
 	"github.com/sirupsen/logrus"
 )
 
-type config struct {
-	User     string `env:"DBUSER"`
-	Password string `env:"DBPASSWORD"`
-	Database string `env:"DATABASE"`
-}
-
-// Load required environment variables and put them in the config struct.
-func loadEnv() config {
-	logger.DefaultLogger.Info("Loading environment variables.")
-
-	cfg := config{}
-	if err := env.Parse(&cfg); err != nil {
-		panic(err.Error())
-	}
-
-	return cfg
+// Interface for the datbase config. 
+type DatabaseConfig interface {
+	GetUser() string
+	GetPassword() string
+	GetDatabase() string
 }
 
 // Connect to the MYSQL database and return the connection.
-func connect(conf *config) *sql.DB {
+func connect(conf DatabaseConfig) *sql.DB {
 	// Setup a database CONFIG with User/Passwd sourced from environment variables.
+	logger.DefaultLogger.WithFields(logrus.Fields{
+		"user":     conf.GetUser(),
+		"database": conf.GetDatabase(),
+	}).Debug("Setting up connection to database.")
+
 	cfg := mysql.Config{
-		User:                 conf.User,
-		Passwd:               conf.Password,
+		User:                 conf.GetUser(),
+		Passwd:               conf.GetPassword(),
 		Net:                  "tcp",
 		Addr:                 "localhost:3306",
-		DBName:               conf.Database,
+		DBName:               conf.GetDatabase(),
 		AllowNativePasswords: true,
 	}
 
@@ -52,8 +45,8 @@ func connect(conf *config) *sql.DB {
 	err = db.Ping()
 	if err != nil {
 		logger.DefaultLogger.WithFields(logrus.Fields{
-			"user":     conf.User,
-			"database": conf.Database,
+			"user":     conf.GetUser(),
+			"database": conf.GetDatabase(),
 		}).Error("Error connecting to database:", err.Error())
 		panic(err.Error())
 	}
@@ -62,18 +55,10 @@ func connect(conf *config) *sql.DB {
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(10)
 
+	logger.DefaultLogger.Info("Connected to database.")
 	return db
 }
 
-func main() {
-	conf := loadEnv()
-	connect(&conf)
-
-	// Log the user and database we are attempting to connect to.
-	logger.DefaultLogger.WithFields(logrus.Fields{
-		"user":     conf.User,
-		"database": conf.Database,
-	}).Debug("Setting up connection to database.")
-
-	logger.DefaultLogger.Info("Connected to database.")
+func GetConnection(conf DatabaseConfig) *sql.DB {
+	return connect(conf)
 }
