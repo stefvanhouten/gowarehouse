@@ -1,11 +1,17 @@
 package logger
 
 import (
+	"github.com/caarlos0/env/v6"
+	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
+)
 
-	"github.com/sirupsen/logrus"
+const (
+	DEVELOPMENT = "DEV"
+	PRODUCTION  = "PROD"
 )
 
 // Global logger instance that can be used throughout the application with the
@@ -36,27 +42,25 @@ func (hook *WriterHook) Levels() []logrus.Level {
 	return hook.LogLevels
 }
 
-func init() {
-	DefaultLogger = logrus.New()
-	// Open the logfile.
-	f, err := os.OpenFile(
-		os.Getenv("LOGDIR")+"log.log",
-		os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644,
-	)
+// Holds the required environment variables for the logger module.
+type config struct {
+	// XXX: Can we access an ENUM here?
+	Environment string `env:"ENVIRONMENT" envDefault:"DEV"`
+	LogDir      string `env:"LOGDIR"`
+}
 
-	if err != nil {
+// Load required environment variables and put them in the config struct.
+func loadEnv() config {
+	cfg := config{}
+	if err := env.Parse(&cfg); err != nil {
 		panic(err.Error())
 	}
 
-	if env := os.Getenv("ENVIRONMENT"); env != "dev" {
-		DefaultLogger.SetFormatter(&logrus.JSONFormatter{})
+	return cfg
+}
 
-		// In production all INFO and above logs will be written to file.
-		DefaultLogger.SetLevel(logrus.InfoLevel)
-		DefaultLogger.SetOutput(f)
-		return
-	}
-
+// Setup the logger for development mode, logging to stdout and file based on LogLevel.
+func setupDebugLogger(logfile *os.File) {
 	// This removes all configured output hooks, allowing us to overwrite
 	// the default output location.
 	DefaultLogger.SetOutput(ioutil.Discard)
@@ -72,6 +76,8 @@ func init() {
 			logrus.DebugLevel,
 			logrus.InfoLevel,
 		},
+		// The logs that go into the console should be human readable and have a nice
+		// color and format.
 		Formatter: &logrus.TextFormatter{
 			TimestampFormat: "2006-01-02 15:04:05",
 			FullTimestamp:   false,
@@ -81,7 +87,7 @@ func init() {
 
 	// Everything else can go into the logfile.
 	DefaultLogger.AddHook(&WriterHook{
-		Writer: f,
+		Writer: logfile,
 		LogLevels: []logrus.Level{
 			logrus.WarnLevel,
 			logrus.PanicLevel,
@@ -91,4 +97,34 @@ func init() {
 		},
 		Formatter: &logrus.JSONFormatter{},
 	})
+}
+
+// Setup the logger for production mode. This means logging to a file only.
+func setupProductionLogger(logfile *os.File) {
+	DefaultLogger.SetFormatter(&logrus.JSONFormatter{})
+
+	// In production all INFO and above logs will be written to file.
+	DefaultLogger.SetLevel(logrus.InfoLevel)
+	DefaultLogger.SetOutput(logfile)
+}
+
+func init() {
+	DefaultLogger = logrus.New()
+	cfg := loadEnv()
+
+	// Open the logfile.
+	logfile, err := os.OpenFile(
+		cfg.LogDir+"log.log",
+		os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644,
+	)
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	if strings.ToUpper(cfg.Environment) == PRODUCTION {
+		setupProductionLogger(logfile)
+	} else {
+		setupDebugLogger(logfile)
+	}
 }
