@@ -17,12 +17,13 @@ var (
 type WriterHook struct {
 	Writer    io.Writer
 	LogLevels []logrus.Level
+	Formatter logrus.Formatter
 }
 
 // Fire will be called when some logging function is called with current hook
 // It will format log entry to string and write it to appropriate writer
 func (hook *WriterHook) Fire(entry *logrus.Entry) error {
-	line, err := entry.String()
+	line, err := hook.Formatter.Format(entry)
 	if err != nil {
 		return err
 	}
@@ -37,8 +38,6 @@ func (hook *WriterHook) Levels() []logrus.Level {
 
 func init() {
 	DefaultLogger = logrus.New()
-	DefaultLogger.SetFormatter(&logrus.JSONFormatter{})
-
 	// Open the logfile.
 	f, err := os.OpenFile(
 		os.Getenv("LOGDIR")+"log.log",
@@ -50,6 +49,8 @@ func init() {
 	}
 
 	if env := os.Getenv("ENVIRONMENT"); env != "dev" {
+		DefaultLogger.SetFormatter(&logrus.JSONFormatter{})
+
 		// In production all INFO and above logs will be written to file.
 		DefaultLogger.SetLevel(logrus.InfoLevel)
 		DefaultLogger.SetOutput(f)
@@ -71,6 +72,11 @@ func init() {
 			logrus.DebugLevel,
 			logrus.InfoLevel,
 		},
+		Formatter: &logrus.TextFormatter{
+			TimestampFormat: "2006-01-02 15:04:05",
+			FullTimestamp:   false,
+			ForceColors:     true,
+		},
 	})
 
 	// Everything else can go into the logfile.
@@ -83,6 +89,6 @@ func init() {
 			logrus.FatalLevel,
 			logrus.TraceLevel,
 		},
+		Formatter: &logrus.JSONFormatter{},
 	})
-
 }
