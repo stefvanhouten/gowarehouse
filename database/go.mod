@@ -9,6 +9,7 @@ require (
 
 require (
 	example/logger v0.0.0-00010101000000-000000000000 // indirect
+	github.com/caarlos0/env/v6 v6.10.1 // indirect
 	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
 )
 
