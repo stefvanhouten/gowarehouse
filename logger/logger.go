@@ -1,13 +1,23 @@
 package logger
 
 import (
-	"github.com/caarlos0/env/v6"
 	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"os"
 	"strings"
 )
+
+type LoggerConfig interface {
+	GetEnvironment() string
+	GetLogDir() string
+}
+
+type WriterHook struct {
+	Writer    io.Writer
+	LogLevels []logrus.Level
+	Formatter logrus.Formatter
+}
 
 const (
 	DEVELOPMENT = "DEV"
@@ -19,12 +29,6 @@ const (
 var (
 	DefaultLogger *logrus.Logger
 )
-
-type WriterHook struct {
-	Writer    io.Writer
-	LogLevels []logrus.Level
-	Formatter logrus.Formatter
-}
 
 // Fire will be called when some logging function is called with current hook
 // It will format log entry to string and write it to appropriate writer
@@ -40,23 +44,6 @@ func (hook *WriterHook) Fire(entry *logrus.Entry) error {
 // Levels define on which log levels this hook would trigger
 func (hook *WriterHook) Levels() []logrus.Level {
 	return hook.LogLevels
-}
-
-// Holds the required environment variables for the logger module.
-type config struct {
-	// XXX: Can we access an ENUM here?
-	Environment string `env:"ENVIRONMENT" envDefault:"DEV"`
-	LogDir      string `env:"LOGDIR"`
-}
-
-// Load required environment variables and put them in the config struct.
-func loadEnv() config {
-	cfg := config{}
-	if err := env.Parse(&cfg); err != nil {
-		panic(err.Error())
-	}
-
-	return cfg
 }
 
 // Setup the logger for development mode, logging to stdout and file based on LogLevel.
@@ -108,13 +95,16 @@ func setupProductionLogger(logfile *os.File) {
 	DefaultLogger.SetOutput(logfile)
 }
 
-func init() {
+// Setup the logger based on passed config.
+// This funcion will create a new DefaultLogger instance, and only has to be called once.
+func Setup(conf LoggerConfig) {
+	// TODO: Find out the go way of setting up a logger instance like this.
+	// Singleton pattern?
 	DefaultLogger = logrus.New()
-	cfg := loadEnv()
 
 	// Open the logfile.
 	logfile, err := os.OpenFile(
-		cfg.LogDir+"log.log",
+		conf.GetLogDir()+"log.log",
 		os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644,
 	)
 
@@ -122,7 +112,7 @@ func init() {
 		panic(err.Error())
 	}
 
-	if strings.ToUpper(cfg.Environment) == PRODUCTION {
+	if strings.ToUpper(conf.GetEnvironment()) == PRODUCTION {
 		setupProductionLogger(logfile)
 	} else {
 		setupDebugLogger(logfile)
