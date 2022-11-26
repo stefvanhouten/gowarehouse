@@ -26,4 +26,7 @@ require (
 )
 
 replace example/logger => ../logger
+
 replace example/database => ../database
+
+replace example/models => ../models

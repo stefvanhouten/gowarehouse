@@ -2,12 +2,14 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
 
 	"example/database" // Our local database module.
 	"example/logger"   // Our local logging module.
+	"example/models"   // Our local models module.
 
 	"github.com/caarlos0/env/v6"
 )
@@ -37,23 +39,16 @@ func (c config) GetDatabase() string {
 	return c.Database
 }
 
-type product struct {
-	ID    int     `json:"id"`
-	Name  string  `json:"name"`
-	Price float64 `json:"price"`
+func (c config) GetEnvironment() string {
+	return c.Environment
 }
 
-var products = []product{
-	{ID: 1, Name: "Product 1", Price: 10.00},
-	{ID: 2, Name: "Product 2", Price: 20.00},
-	{ID: 3, Name: "Product 3", Price: 30.00},
-	{ID: 4, Name: "Product 4", Price: 40.00},
+func (c config) GetLogDir() string {
+	return c.LogDir
 }
 
 // Load required environment variables and put them in the config struct.
 func loadEnv() *config {
-	logger.DefaultLogger.Info("Loading environment variables into config.")
-
 	cfg := config{}
 	if err := env.Parse(&cfg); err != nil {
 		panic(err.Error())
@@ -63,8 +58,10 @@ func loadEnv() *config {
 }
 
 func main() {
-	logger.DefaultLogger.Info("Starting server")
 	cfg := loadEnv()
+	logger.Setup(cfg)
+	logger.DefaultLogger.Info("Starting server")
+
 	env := &Env{
 		cfg: cfg,
 		db:  database.GetConnection(cfg),
@@ -73,23 +70,8 @@ func main() {
 
 	router.GET("/products", env.getProducts)
 	router.GET("/products/:id", env.getProductByID)
-	router.POST("/products", env.postProducts)
+	// router.POST("/products", env.postProducts)
 	router.Run("localhost:8080")
-}
-
-func (env *Env) getProducts(c *gin.Context) {
-	c.IndentedJSON(http.StatusOK, products)
-}
-
-func (env *Env) postProducts(c *gin.Context) {
-	var newProduct product
-
-	if err := c.BindJSON(&newProduct); err != nil {
-		return
-	}
-
-	products = append(products, newProduct)
-	c.IndentedJSON(http.StatusCreated, newProduct)
 }
 
 func (env *Env) getProductByID(c *gin.Context) {
@@ -100,11 +82,43 @@ func (env *Env) getProductByID(c *gin.Context) {
 		return
 	}
 
-	for _, p := range products {
-		if p.ID == int(id) {
-			c.IndentedJSON(http.StatusOK, p)
-			return
-		}
+	product, err := products.ProductByID(env.db, id)
+
+	if err != nil {
+		logger.DefaultLogger.Debug("Error getting product:", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
-	c.IndentedJSON(http.StatusNotFound, gin.H{"message": "product not found"})
+
+	if product == nil {
+		c.IndentedJSON(
+			http.StatusNotFound,
+			gin.H{"error": fmt.Sprintf("No product found for ID: '%d'", id)})
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, product)
 }
+
+func (env *Env) getProducts(c *gin.Context) {
+	products, err := products.AllProducts(env.db)
+
+	if err != nil {
+		logger.DefaultLogger.Error("Error getting products:", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, products)
+}
+
+// func (env *Env) postProducts(c *gin.Context) {
+// 	var newProduct product
+
+// 	if err := c.BindJSON(&newProduct); err != nil {
+// 		return
+// 	}
+
+// 	products = append(products, newProduct)
+// 	c.IndentedJSON(http.StatusCreated, newProduct)
+// }

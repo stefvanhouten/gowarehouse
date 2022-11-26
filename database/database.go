@@ -9,7 +9,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Interface for the datbase config. 
+// TODO: Add functionality to re-use open connections instead of initializing a new one
+// every time we want to access the database.
+
+// Interface for the datbase config.
 type DatabaseConfig interface {
 	GetUser() string
 	GetPassword() string
