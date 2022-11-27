@@ -7,10 +7,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"example/database" // Our local database module.
-	"example/logger"   // Our local logging module.
-	"example/models"   // Our local models module.
-
+	"example/api/adapter/database"
+	"example/api/models"
+	"example/logger"
 	"github.com/caarlos0/env/v6"
 )
 
