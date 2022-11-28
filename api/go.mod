@@ -32,4 +32,3 @@ require (
 )
 
 replace example/logger => ../logger
-
